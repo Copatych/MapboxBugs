@@ -1,16 +1,19 @@
 package com.example.mapboxbugs
 
+import android.graphics.Color
 import android.os.Bundle
+import androidx.annotation.ColorInt
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.doOnNextLayout
 import androidx.core.view.postDelayed
 import com.mapbox.geojson.Feature
+import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.LineString
 import com.mapbox.geojson.Point
-import com.mapbox.maps.CoordinateBounds
 import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.MapView
 import com.mapbox.maps.Style
+import com.mapbox.maps.extension.style.expressions.dsl.generated.match
+import com.mapbox.maps.extension.style.expressions.generated.Expression
 import com.mapbox.maps.extension.style.layers.addLayer
 import com.mapbox.maps.extension.style.layers.generated.lineLayer
 import com.mapbox.maps.extension.style.sources.addSource
@@ -28,66 +31,95 @@ class MainActivity : AppCompatActivity() {
             Point.fromLngLat(-122.483396, 37.8327),
             Point.fromLngLat(-122.483568, 37.832056),
             Point.fromLngLat(-122.48404, 37.831141),
-            Point.fromLngLat(-122.48404, 37.830497),
-            Point.fromLngLat(-122.483482, 37.82992),
-            Point.fromLngLat(-122.483568, 37.829548),
-            Point.fromLngLat(-122.48507, 37.829446),
-            Point.fromLngLat(-122.4861, 37.828802),
-            Point.fromLngLat(-122.486958, 37.82931),
-            Point.fromLngLat(-122.487001, 37.830802),
-            Point.fromLngLat(-122.487516, 37.831683),
-            Point.fromLngLat(-122.488031, 37.832158),
-            Point.fromLngLat(-122.488889, 37.832971),
-            Point.fromLngLat(-122.489876, 37.832632),
-            Point.fromLngLat(-122.490434, 37.832937),
-            Point.fromLngLat(-122.49125, 37.832429),
-            Point.fromLngLat(-122.491636, 37.832564),
-            Point.fromLngLat(-122.492237, 37.833378),
-            Point.fromLngLat(-122.493782, 37.833683)
+            Point.fromLngLat(-122.48404, 37.830497)
         )
 
-//        mapView.mapboxMap.getStyle { style ->
         mapView.mapboxMap.loadStyle(Style.LIGHT) { style ->
             val pointsSource = "pointsSource"
             style.addSource(geoJsonSource(pointsSource) {
-                feature(
-                    Feature.fromGeometry(
-                        LineString.fromLngLats(points)
+                featureCollection(
+                    FeatureCollection.fromFeatures(
+                        listOf(
+                            Feature.fromGeometry(
+                                LineString.fromLngLats(points.subList(0, 2))
+                            ).apply { addStringProperty("type", Type.RED.name) },
+                            Feature.fromGeometry(
+                                LineString.fromLngLats(points.subList(1, 3))
+                            ).apply { addStringProperty("type", Type.GREEN.name) },
+                            Feature.fromGeometry(
+                                LineString.fromLngLats(points.subList(2, 4))
+                            ).apply { addStringProperty("type", Type.BLUE.name) },
+                            Feature.fromGeometry(
+                                LineString.fromLngLats(points.subList(3, 5))
+                            ).apply { addStringProperty("type", null) },
+                            Feature.fromGeometry(
+                                LineString.fromLngLats(points.subList(4, 6))
+                            ),
+                        )
                     )
                 )
             })
 
+            fun Expression.ExpressionBuilder.getColor(type: Type) {
+                stop {
+                    literal(type.name)
+                    color(type.color)
+                }
+            }
+
             style.addLayer(
                 lineLayer("pointsLayer", pointsSource) {
                     lineWidth(10.0)
+
+                    // there is IncorrectNumberOfArgumentsInExpression
+                    lineColor(
+                        match {
+                            get("type")
+                            getColor(Type.RED)
+                            getColor(Type.GREEN)
+                            getColor(Type.BLUE)
+
+                            color(Color.BLACK)
+                        }
+                    )
+
+                    // there is no IncorrectNumberOfArgumentsInExpression
+//                    lineColor(
+//                        match {
+//                            get("type")
+//                            stop {
+//                                literal(Type.RED.name)
+//                                color(Type.RED.color)
+//                            }
+//
+//                            stop {
+//                                literal(Type.GREEN.name)
+//                                color(Type.GREEN.color)
+//                            }
+//
+//                            stop {
+//                                literal(Type.BLUE.name)
+//                                color(Type.BLUE.color)
+//                            }
+//
+//                            color(Color.BLACK)
+//                        }
+//                    )
                 }
             )
 
-
-            fun focusPoints() {
+            mapView.postDelayed(150) {
                 val edgeInsets = EdgeInsets(100.0, 100.0, 100.0, 100.0)
-//                val cameraOptions = mapView.mapboxMap.cameraForCoordinates(points, edgeInsets)
-//                val cameraOptions = mapView.mapboxMap.cameraForGeometry(GeometryCollection.fromGeometries(points), edgeInsets)
-                val cameraOptions = mapView.mapboxMap.cameraForCoordinateBounds(
-                    CoordinateBounds(
-                        Point.fromLngLat(points.maxOf { it.longitude() }, points.maxOf { it.latitude() }),
-                        Point.fromLngLat(points.minOf { it.longitude() }, points.minOf { it.latitude() })
-                    ),
-                    edgeInsets
-                )
+                val cameraOptions = mapView.mapboxMap.cameraForCoordinates(points, edgeInsets)
 
                 mapView.mapboxMap.setCamera(cameraOptions)
             }
-
-            // In the doOnNextLayout, focusPoints() method does not work correctly, the zoom is detected incorrectly.
-            mapView.doOnNextLayout {
-                focusPoints()
-            }
-
-            // To verify that focusPoints() works as expected after delay
-            mapView.postDelayed(5000) {
-                focusPoints()
-            }
         }
+    }
+
+    enum class Type(@ColorInt val color: Int) {
+        RED(Color.RED),
+        GREEN(Color.GREEN),
+        BLUE(Color.BLUE);
     }
 }
